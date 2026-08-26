@@ -12,9 +12,9 @@ legs:
   odds_max: 1.60
 
 filters:
-  min_bookmakers: 10
-  model_min_prob: 0.55
-  consensus_min_prob: 0.60
+  min_bookmakers: 8
+  model_min_prob: 0.45
+  consensus_min_prob: 0.55
 
 blend:
   w_model: 0.35
