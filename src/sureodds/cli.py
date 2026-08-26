@@ -82,6 +82,68 @@ def cmd_bankroll(args) -> None:
         print(repo.get_bankroll(conn, float(cfg.staking.paper_floor_bankroll)))
 
 
+def cmd_listen(args) -> None:
+    import time
+
+    import httpx
+
+    from . import orchestrator
+
+    cfg, conn = _open()
+    tok = cfg.env.get("TELEGRAM_BOT_TOKEN", "")
+    if not tok:
+        raise SystemExit("TELEGRAM_BOT_TOKEN not set")
+    cid = cfg.env.get("TELEGRAM_CHAT_ID", "")
+    print(f"listening for Telegram Place/Skip on @{cfg.env.get('TELEGRAM_BOT_TOKEN','')[:8]}... (Ctrl+C to stop)")
+    offset = None
+    # ack existing
+    with httpx.Client(timeout=15) as c:
+        r = c.get(f"https://api.telegram.org/bot{tok}/getUpdates", params={"timeout": 1})
+        if r.json().get("result"):
+            offset = max(u["update_id"] for u in r.json()["result"]) + 1
+    while True:
+        try:
+            with httpx.Client(timeout=35) as c:
+                params = {"timeout": 30}
+                if offset is not None:
+                    params["offset"] = offset
+                r = c.get(f"https://api.telegram.org/bot{tok}/getUpdates", params=params)
+                j = r.json()
+                for u in j.get("result", []):
+                    offset = u["update_id"] + 1
+                    if "callback_query" in u:
+                        cb = u["callback_query"]
+                        data = cb.get("data", "")
+                        sid = None
+                        accept = None
+                        if data.startswith("validate:"):
+                            sid = int(data.split(":")[1]); accept = True
+                        elif data.startswith("reject:"):
+                            sid = int(data.split(":")[1]); accept = False
+                        if sid is not None:
+                            status = orchestrator.validate_slip(conn, sid, accept)
+                            c.post(f"https://api.telegram.org/bot{tok}/answerCallbackQuery", json={"callback_query_id": cb["id"], "text": status})
+                            if cid:
+                                c.post(f"https://api.telegram.org/bot{tok}/sendMessage", json={"chat_id": cid, "text": f"Slip #{sid} -> {status}"})
+                            print(f"callback {data} -> {status}")
+                    elif "message" in u:
+                        text = (u["message"].get("text") or "").lower()
+                        row = conn.execute("SELECT id FROM slips WHERE status='PENDING' ORDER BY id DESC LIMIT 1").fetchone()
+                        if row and any(k in text for k in ["validate", "place", "yes"]):
+                            status = orchestrator.validate_slip(conn, row["id"], True)
+                            if cid:
+                                c.post(f"https://api.telegram.org/bot{tok}/sendMessage", json={"chat_id": cid, "text": f"Slip #{row['id']} -> {status}"})
+                        elif row and any(k in text for k in ["skip", "reject", "no"]):
+                            status = orchestrator.validate_slip(conn, row["id"], False)
+                            if cid:
+                                c.post(f"https://api.telegram.org/bot{tok}/sendMessage", json={"chat_id": cid, "text": f"Slip #{row['id']} -> {status}"})
+        except KeyboardInterrupt:
+            break
+        except (RuntimeError, OSError) as e:
+            print(f"listen error: {e}")
+            time.sleep(2)
+
+
 def cmd_run(_args) -> None:
     from .scheduler import start
 
@@ -123,6 +185,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_bankroll)
 
     sub.add_parser("run").set_defaults(func=cmd_run)
+    lp = sub.add_parser("listen", help="poll Telegram for Place/Skip buttons")
+    lp.set_defaults(func=cmd_listen)
     return p
 
 

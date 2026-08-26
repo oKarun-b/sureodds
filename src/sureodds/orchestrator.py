@@ -127,6 +127,9 @@ def pick(
 def validate_slip(conn, slip_id: int, accept: bool) -> str:
     from .core.models import SlipStatus
 
+    row = conn.execute("SELECT status FROM slips WHERE id=?", (slip_id,)).fetchone()
+    if row and row["status"] not in (SlipStatus.PENDING.value,):
+        return row["status"]
     status = SlipStatus.VALIDATED if accept else SlipStatus.REJECTED
     repo.set_slip_status(conn, slip_id, status)
     return status.value

@@ -57,7 +57,7 @@ class ApiFootball(OddsProvider, ResultsProvider):
                 day_str = str(kickoff.date())
                 kickoff_s = str(kickoff)
             else:
-                kickoff = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+                kickoff = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))  # noqa: FURB162 - Z not handled by fromisoformat
                 day_str = str(kickoff.date())
                 kickoff_s = str(kickoff)
             out.append(
@@ -132,7 +132,7 @@ class ApiFootball(OddsProvider, ResultsProvider):
             day_str = str(kickoff.date())
             kickoff_s = str(kickoff)
         else:
-            kickoff = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+            kickoff = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))  # noqa: FURB162
             day_str = str(kickoff.date())
             kickoff_s = str(kickoff)
         return Fixture(
