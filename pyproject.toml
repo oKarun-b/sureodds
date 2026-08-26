@@ -1,0 +1,38 @@
+[project]
+name = "sureodds"
+version = "0.1.0"
+description = "Daily 1X2 accumulator bot: Dixon-Coles engine, BetPawa 2UP edge, calibration-governed Kelly staking"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "httpx>=0.27",
+    "apscheduler>=3.10,<4",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+sureodds = "sureodds.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+integration = [
+    "playwright>=1.45",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sureodds"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

@@ -1,0 +1,57 @@
+timezone: Africa/Douala
+currency: FCFA
+
+target:
+  odds_low: 1.95
+  odds_high: 2.05
+
+legs:
+  min: 2
+  max: 4
+  odds_min: 1.20
+  odds_max: 1.60
+
+filters:
+  min_bookmakers: 10
+  model_min_prob: 0.55
+  consensus_min_prob: 0.60
+
+blend:
+  w_model: 0.35
+
+ratings:
+  half_life_days: 120
+  prior_matches: 8
+  max_goals: 8
+
+win_bonus:
+  min_leg_odds: 1.20
+  pct_by_legs:
+    3: 0.03
+    4: 0.04
+    5: 0.06
+    6: 0.08
+
+staking:
+  min_stake: 50
+  paper_floor_bankroll: 10000
+  growth:
+    active_below_bankroll: 100000
+    cap_pct: 0.20
+    demote_pct: 0.05
+    max_consecutive_losses: 2
+    max_drawdown: 0.40
+  security:
+    tiers: [0.125, 0.25, 0.5]
+    window_slips: 60
+    promote_brier_tier2: 0.240
+    promote_brier_tier3: 0.225
+    demote_brier: 0.260
+
+schedule:
+  pick: "09:00"
+  settle: "08:00"
+
+api:
+  football_base: https://v3.football.api-sports.io
+  daily_call_budget: 90
