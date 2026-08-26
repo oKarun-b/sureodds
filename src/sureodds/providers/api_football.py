@@ -51,14 +51,23 @@ class ApiFootball(OddsProvider, ResultsProvider):
             lg = item["league"]
             teams = item["teams"]
             goals = item.get("goals") or {}
+            raw_date = fx["date"]
+            if isinstance(raw_date, (int, float)):
+                kickoff = datetime.fromtimestamp(int(raw_date), tz=UTC)
+                day_str = str(kickoff.date())
+                kickoff_s = str(kickoff)
+            else:
+                kickoff = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+                day_str = str(kickoff.date())
+                kickoff_s = str(kickoff)
             out.append(
                 Fixture(
                     id=int(fx["id"]),
-                    date=str(datetime.fromtimestamp(fx["date"], tz=UTC).date()),
+                    date=day_str,
                     league=f"{lg['country']} - {lg['name']}",
                     home=teams["home"]["name"],
                     away=teams["away"]["name"],
-                    kickoff=str(datetime.fromtimestamp(fx["date"], tz=UTC)),
+                    kickoff=kickoff_s,
                     status=(fx.get("status") or {}).get("short", "NS"),
                     home_goals=goals.get("home"),
                     away_goals=goals.get("away"),
@@ -70,7 +79,12 @@ class ApiFootball(OddsProvider, ResultsProvider):
         result: dict[int, list[Quote]] = {}
         page = 1
         while True:
-            payload = self._get("/odds", {"date": day, "bet": "1", "page": page})
+            try:
+                payload = self._get("/odds", {"date": day, "bet": "1", "page": page})
+            except RuntimeError as e:
+                if "Page parameter" in str(e) and result:
+                    break
+                raise
             for item in payload.get("response", []):
                 fid = int(item["fixture"]["id"])
                 quotes = result.setdefault(fid, [])
@@ -112,13 +126,22 @@ class ApiFootball(OddsProvider, ResultsProvider):
         lg = item["league"]
         teams = item["teams"]
         goals = item.get("goals") or {}
+        raw_date = fx["date"]
+        if isinstance(raw_date, (int, float)):
+            kickoff = datetime.fromtimestamp(int(raw_date), tz=UTC)
+            day_str = str(kickoff.date())
+            kickoff_s = str(kickoff)
+        else:
+            kickoff = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+            day_str = str(kickoff.date())
+            kickoff_s = str(kickoff)
         return Fixture(
             id=int(fx["id"]),
-            date=str(datetime.fromtimestamp(fx["date"], tz=UTC).date()),
+            date=day_str,
             league=f"{lg['country']} - {lg['name']}",
             home=teams["home"]["name"],
             away=teams["away"]["name"],
-            kickoff=str(datetime.fromtimestamp(fx["date"], tz=UTC)),
+            kickoff=kickoff_s,
             status=(fx.get("status") or {}).get("short", "NS"),
             home_goals=goals.get("home"),
             away_goals=goals.get("away"),

@@ -9,8 +9,8 @@ from .storage import repo
 
 
 def _open():
-    cfg = load_config()
     apply_dotenv()
+    cfg = load_config()
     conn = dbmod.connect(cfg.db_path)
     dbmod.migrate(conn)
     return cfg, conn

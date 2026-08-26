@@ -2,8 +2,8 @@ timezone: Africa/Douala
 currency: FCFA
 
 target:
-  odds_low: 1.95
-  odds_high: 2.05
+  odds_low: 1.85
+  odds_high: 2.20
 
 legs:
   min: 2
