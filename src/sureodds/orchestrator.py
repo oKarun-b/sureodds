@@ -65,22 +65,22 @@ def _rating_context(conn, cfg: AppConfig):
 
 def format_card(slip_id: int, slip, reason: str) -> str:
     lines = [
-        f"🎯 SUREODDS SLIP #{slip_id} — {slip.date}",
-        f"Mode: {slip.mode or 'PENDING'} · Stake: {slip.stake:.0f} FCFA",
+        f"SUREODDS SLIP #{slip_id} -- {slip.date}",
+        f"Mode: {slip.mode or 'PENDING'} | Stake: {slip.stake:.0f} FCFA",
         "",
     ]
     for leg in slip.legs:
         tag = " [2UP]" if leg.eligible_2up else ""
         pick = leg.fixture.home if leg.side.value == "HOME" else leg.fixture.away
-        lines.append(f"• {leg.fixture.home} vs {leg.fixture.away} — {pick}{tag} @ {leg.odds}")
-        lines.append(f"   {leg.fixture.league} · ko {leg.fixture.kickoff[:16]}")
+        lines.append(f"- {leg.fixture.home} vs {leg.fixture.away} -- {pick}{tag} @ {leg.odds}")
+        lines.append(f"   {leg.fixture.league} | ko {leg.fixture.kickoff[:16]}")
         lines.append(
-            f"   model {leg.model_p:.0%} · market {leg.consensus_p:.0%} · eff {leg.eff_p:.0%}"
+            f"   model {leg.model_p:.0%} | market {leg.consensus_p:.0%} | eff {leg.eff_p:.0%}"
         )
     lines += [
         "",
-        f"Total odds: {slip.total_odds:.2f} (+{slip.bonus_pct:.0%} bonus → {slip.eff_total_odds:.2f})",
-        f"Joint probability: {slip.eff_joint_p:.1%} · EV: {slip.ev:+.1%}",
+        f"Total odds: {slip.total_odds:.2f} (+{slip.bonus_pct:.0%} bonus -> {slip.eff_total_odds:.2f})",
+        f"Joint probability: {slip.eff_joint_p:.1%} | EV: {slip.ev:+.1%}",
         f"Engine note: {reason}",
     ]
     return "\n".join(lines)

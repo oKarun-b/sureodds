@@ -12,10 +12,11 @@ _SIDE_KEYS = {Side.HOME: "home_o", Side.DRAW: "draw_o", Side.AWAY: "away_o"}
 
 
 def devig(h: float, d: float, a: float) -> tuple[float, float, float]:
-    total = h + d + a
+    ih, id_, ia = 1.0 / h, 1.0 / d, 1.0 / a
+    total = ih + id_ + ia
     if total <= 0:
         raise ValueError("non-positive book")
-    return h / total, d / total, a / total
+    return ih / total, id_ / total, ia / total
 
 
 @dataclass(frozen=True)
