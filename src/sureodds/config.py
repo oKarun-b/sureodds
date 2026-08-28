@@ -79,6 +79,11 @@ class ScheduleCfg:
 
 
 @dataclass(frozen=True)
+class BetpawaCfg:
+    leagues: list[str]
+
+
+@dataclass(frozen=True)
 class ApiCfg:
     football_base: str
     daily_call_budget: int
@@ -96,6 +101,7 @@ class AppConfig:
     win_bonus: WinBonusCfg
     staking: StakingCfg
     schedule: ScheduleCfg
+    betpawa: BetpawaCfg
     api: ApiCfg
     db_path: Path
     env: dict[str, str] = field(default_factory=dict)
@@ -121,6 +127,7 @@ def _build(d: dict, env: dict[str, str]) -> AppConfig:
             security=SecurityCfg(**d["staking"]["security"]),
         ),
         schedule=ScheduleCfg(**d["schedule"]),
+        betpawa=BetpawaCfg(leagues=d.get("betpawa", {}).get("leagues", [])),
         api=ApiCfg(**d["api"]),
         db_path=Path(env.get("SUREODDS_DB", "data/sureodds.db")),
         env=env,

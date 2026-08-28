@@ -145,11 +145,21 @@ def pick(
             if fid in by_id:
                 raw_quotes.setdefault(fid, []).extend(qs)
     quotes = raw_quotes
+    # no hard filter here; BetPawa allowlist is applied as soft preference after candidate evaluation
 
     avg_h, avg_a, rt = _rating_context(conn, cfg)
     candidates = blend.evaluate_candidates(
         fixtures, quotes, rt, avg_h, avg_a, cfg, eligible_2up=eligible_2up
     )
+    # BetPawa allowlist as soft preference: prefer allowlist legs, fallback to all if not enough
+    if cfg.betpawa.leagues and candidates:
+        allow = [c for c in candidates if c.fixture.league in cfg.betpawa.leagues]
+        if len(allow) >= 2:
+            candidates = allow
+        elif allow and len(candidates) > len(allow):
+            # keep allowlist plus best others to reach at least 2
+            extra = [c for c in candidates if c not in allow][:3]
+            candidates = allow + extra
     slip = accumulator.build_slip(candidates, cfg, day)
     if slip is None:
         return None, (

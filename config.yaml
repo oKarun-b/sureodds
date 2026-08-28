@@ -12,9 +12,9 @@ legs:
   odds_max: 1.60
 
 filters:
-  min_bookmakers: 8
-  model_min_prob: 0.45
-  consensus_min_prob: 0.55
+  min_bookmakers: 6
+  model_min_prob: 0.40
+  consensus_min_prob: 0.50
 
 blend:
   w_model: 0.35
@@ -51,6 +51,27 @@ staking:
 schedule:
   pick: "09:00"
   settle: "08:00"
+
+betpawa:
+  leagues:
+    - Cameroon - Elite One
+    - England - Premier League
+    - Spain - La Liga
+    - France - Ligue 1
+    - Italy - Serie A
+    - Germany - Bundesliga
+    - USA - Major League Soccer
+    - Brazil - Serie A
+    - World - CONMEBOL Libertadores
+    - World - CONMEBOL Sudamericana
+    - Africa - CAF Champions League
+    - Norway - Eliteserien
+    - Norway - 1. Division
+    - Sweden - Allsvenskan
+    - Sweden - Damallsvenskan
+    - Argentina - Liga Profesional Argentina
+    - USA - USL Championship
+    - USA - USL League One
 
 api:
   football_base: https://v3.football.api-sports.io
