@@ -1,0 +1,24 @@
+name: daily-pick
+
+on:
+  schedule:
+    - cron: "0 8 * * *"  # 08:00 UTC = 09:00 Africa/Douala
+  workflow_dispatch:
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUREODDS_DB: data/sureodds.db
+        run: |
+          python -m sureodds fetch
+          python -m sureodds pick || echo "no slip today"
