@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from .config import AppConfig
 from .core import accumulator, blend, settlement, staking
-from .core.models import Settlement, Side
+from .core.models import Fixture, Settlement, Side
 from .core.ratings import HistoricalMatch, league_averages, team_ratings
 from .providers.api_football import ApiFootball
 from .storage import repo
@@ -30,15 +30,30 @@ def make_provider(cfg: AppConfig, conn) -> ApiFootball:
     )
 
 
+def window_for_day(cfg: AppConfig, day: str) -> tuple[datetime, datetime]:
+    start = datetime.fromisoformat(day).replace(tzinfo=ZoneInfo(cfg.timezone)).replace(hour=9, minute=0, second=0)
+    end = start + timedelta(days=1)
+    return start.astimezone(UTC), end.astimezone(UTC)
+
+
 def fetch(cfg: AppConfig, conn, day: str | None = None) -> dict:
     day = day or today(cfg)
     prov = make_provider(cfg, conn)
-    fixtures = prov.get_fixtures(day)
-    repo.upsert_fixtures(conn, fixtures)
-    odds = prov.get_odds(day)
-    quotes = [q for lst in odds.values() for q in lst]
-    repo.save_quotes(conn, quotes)
-    return {"day": day, "fixtures": len(fixtures), "quote_rows": len(quotes)}
+    start, end = window_for_day(cfg, day)
+    start_day = start.astimezone(ZoneInfo(cfg.timezone)).date().isoformat()
+    end_day = end.astimezone(ZoneInfo(cfg.timezone)).date().isoformat()
+    days = {start_day, end_day}
+    all_fixtures: list = []
+    all_quotes: list = []
+    for d in sorted(days):
+        fxs = prov.get_fixtures(d)
+        all_fixtures.extend(fxs)
+        repo.upsert_fixtures(conn, fxs)
+        odds = prov.get_odds(d)
+        qs = [q for lst in odds.values() for q in lst]
+        all_quotes.extend(qs)
+        repo.save_quotes(conn, qs)
+    return {"day": day, "window": f"{start.isoformat()} -> {end.isoformat()}", "fixtures": len(all_fixtures), "quote_rows": len(all_quotes)}
 
 
 def historical_matches(conn, limit: int = 1500) -> list[HistoricalMatch]:
@@ -86,6 +101,16 @@ def format_card(slip_id: int, slip, reason: str) -> str:
     return "\n".join(lines)
 
 
+def _fixture_in_window(fx: Fixture, start: datetime, end: datetime) -> bool:
+    try:
+        ko = datetime.fromisoformat(fx.kickoff.replace("Z", "+00:00"))  # noqa: FURB162
+        if ko.tzinfo is None:
+            ko = ko.replace(tzinfo=UTC)
+        return start <= ko < end
+    except (ValueError, TypeError):
+        return fx.date in (start.date().isoformat(), end.date().isoformat())
+
+
 def pick(
     cfg: AppConfig,
     conn,
@@ -93,10 +118,21 @@ def pick(
     eligible_2up: set[int] | None = None,
 ) -> tuple[dict | None, str | None]:
     day = day or today(cfg)
-    fixtures = repo.fixtures_for_date(conn, day)
+    start, end = window_for_day(cfg, day)
+    all_fixtures: list = []
+    for d in {start.astimezone(ZoneInfo(cfg.timezone)).date().isoformat(), end.astimezone(ZoneInfo(cfg.timezone)).date().isoformat()}:
+        all_fixtures.extend(repo.fixtures_for_date(conn, d))
+    fixtures = [fx for fx in all_fixtures if _fixture_in_window(fx, start, end)]
     if not fixtures:
-        return None, f"no fixtures stored for {day}; run `fetch` first"
-    quotes = repo.quotes_for_date(conn, day)
+        return None, f"no fixtures in 09:00-09:00 window {start.date().isoformat()} for {cfg.timezone}; run `fetch` first"
+    by_id = {fx.id: fx for fx in fixtures}
+    raw_quotes: dict[int, list] = {}
+    for d in {start.astimezone(ZoneInfo(cfg.timezone)).date().isoformat(), end.astimezone(ZoneInfo(cfg.timezone)).date().isoformat()}:
+        qd = repo.quotes_for_date(conn, d)
+        for fid, qs in qd.items():
+            if fid in by_id:
+                raw_quotes.setdefault(fid, []).extend(qs)
+    quotes = raw_quotes
 
     avg_h, avg_a, rt = _rating_context(conn, cfg)
     candidates = blend.evaluate_candidates(
