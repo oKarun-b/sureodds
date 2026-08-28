@@ -59,31 +59,67 @@ class BetpawaPlaywright:
     def login_and_save_session(self) -> Path:
         sync_playwright = self._require_playwright()
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=self.headless, args=["--disable-blink-features=AutomationControlled"])
             context = browser.new_context(viewport=_random_viewport())
             page = context.new_page()
             page.set_default_timeout(self.timeout_ms)
-            print(f"Opening {self.base_url} — log in manually, then press Enter in this terminal...")
             page.goto(self.base_url, wait_until="domcontentloaded")
-            # wait for manual login: user logs in, we detect balance element or URL change
-            try:
-                page.wait_for_selector("text=Log out", timeout=300000)
-            except Exception:
-                input("Press Enter after you have logged in and see your balance...")
-            # also handle auto-fill if credentials provided
+            _human_delay(1.0, 1.5)
+            # try auto-fill if credentials provided
             if self.username and self.password:
                 try:
-                    # try to fill if login modal still open
-                    phone_sel = "input[type='tel'], input[name*='phone'], input[placeholder*='phone' i]"
-                    if page.locator(phone_sel).count() > 0:
-                        page.locator(phone_sel).first.fill(self.username)
-                        _human_delay(0.2, 0.5)
-                        page.locator("input[type='password']").first.fill(self.password)
-                        _human_delay(0.2, 0.5)
-                        page.locator("button:has-text('Log in'), button:has-text('Login')").first.click()
-                        page.wait_for_timeout(3000)
+                    # open login modal if needed
+                    if page.locator("text=Login").count() > 0 and not self._ensure_logged_in(page):
+                        page.locator("text=Login").first.click()
+                        _human_delay(1.0, 1.5)
+                        # wait for navigation to /login
+                        try:
+                            page.wait_for_url("**/login", timeout=5000)
+                        except Exception:
+                            pass
+                        _human_delay(0.5, 0.9)
+                    phone_sel = "input[name='username'], #phoneNumber, [data-test-id='login-form-phone-number-input']"
+                    # poll for phone input (BetPawa loads JS, may take a few seconds)
+                    for _ in range(20):
+                        if page.locator(phone_sel).count() > 0 and page.locator(phone_sel).first.is_visible():
+                            break
+                        page.wait_for_timeout(500)
+                    else:
+                        raise RuntimeError(f"phone input not found: {phone_sel}")
+                    page.locator(phone_sel).first.fill(self.username)
+                    _human_delay(0.2, 0.5)
+                    page.locator("input[name='password'], [data-test-id='login-form-password-input']").first.fill(self.password)
+                    _human_delay(0.2, 0.5)
+                    # BetPawa Cameroon uses data-test-id log-in-button with text LOG IN
+                    submit_sel = "[data-test-id='log-in-button'], button:has-text('LOG IN')"
+                    page.locator(submit_sel).first.click()
+                    # poll for logged-in state (Balance/My Bets appear, Log out may be hidden in menu)
+                    for _ in range(30):
+                        if page.locator("text=Balance").count() > 0 or page.locator("text=My Bets").count() > 0:
+                            break
+                        page.wait_for_timeout(500)
+                    else:
+                        # fallback: check URL or storage
+                        page.wait_for_timeout(2000)
+                    if not (page.locator("text=Balance").count() > 0 or page.locator("text=My Bets").count() > 0):
+                        raise RuntimeError("login did not show Balance/My Bets")
+                    print("Auto-login succeeded")
+                except Exception as e:
+                    print(f"Auto-login failed: {e}")
+                    if not self.headless:
+                        print(f"Opening {self.base_url} — log in manually, then press Enter...")
+                        try:
+                            page.wait_for_selector("text=Log out", timeout=300000)
+                        except Exception:
+                            input("Press Enter after you have logged in and see your balance...")
+                    else:
+                        raise RuntimeError(f"headless auto-login failed: {e}") from e
+            else:
+                print(f"Opening {self.base_url} — log in manually, then press Enter in this terminal...")
+                try:
+                    page.wait_for_selector("text=Log out", timeout=300000)
                 except Exception:
-                    pass
+                    input("Press Enter after you have logged in and see your balance...")
             context.storage_state(path=str(self.storage_path))
             print(f"Session saved to {self.storage_path}")
             browser.close()
@@ -91,7 +127,7 @@ class BetpawaPlaywright:
 
     def _new_page(self, p):
         storage = str(self.storage_path) if self.storage_path.exists() else None
-        browser = p.chromium.launch(headless=self.headless)
+        browser = p.chromium.launch(headless=self.headless, args=["--disable-blink-features=AutomationControlled"])
         context_kwargs: dict = {"viewport": _random_viewport()}
         if storage:
             context_kwargs["storage_state"] = storage
@@ -130,19 +166,29 @@ class BetpawaPlaywright:
             browser, context, page = self._new_page(p)
             try:
                 page.goto(self.base_url, wait_until="domcontentloaded")
-                _human_delay(0.8, 1.4)
+                _human_delay(1.5, 2.0)
+                # wait a moment for either Balance (logged in via storage) or Login button to appear
+                for _ in range(8):
+                    if self._ensure_logged_in(page) or page.locator("text=Login").first.is_visible():
+                        break
+                    page.wait_for_timeout(500)
 
                 if not self._ensure_logged_in(page) and self.username and self.password:
-                    # try auto login
+                    # try auto login - only if Login button is actually visible (not logged in via storage)
                     try:
-                        page.locator("text=Log in").first.click()
-                        _human_delay(0.5, 0.9)
-                        phone_sel = "input[type='tel'], input[name*='phone']"
+                        login_btn = page.locator("text=Login").first
+                        if login_btn.count() == 0 or not login_btn.is_visible():
+                            # maybe already on login page, check for phone input directly
+                            pass
+                        else:
+                            login_btn.click()
+                            _human_delay(0.5, 0.9)
+                        phone_sel = "input[name='username'], #phoneNumber, [data-test-id='login-form-phone-number-input']"
                         page.locator(phone_sel).first.fill(self.username)
                         _human_delay(0.2, 0.5)
-                        page.locator("input[type='password']").first.fill(self.password)
+                        page.locator("input[name='password'], [data-test-id='login-form-password-input']").first.fill(self.password)
                         _human_delay(0.2, 0.5)
-                        page.locator("button:has-text('Log in')").first.click()
+                        page.locator("[data-test-id='log-in-button'], button:has-text('LOG IN')").first.click()
                         page.wait_for_timeout(3000)
                     except Exception as e:
                         return Receipt(False, error=f"auto-login failed: {e}")
