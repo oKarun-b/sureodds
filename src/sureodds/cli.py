@@ -144,6 +144,52 @@ def cmd_listen(args) -> None:
             time.sleep(2)
 
 
+def cmd_betpawa_login(args) -> None:
+    from .placement.betpawa_pw import BetpawaPlaywright
+
+    cfg, _ = _open()
+    user = cfg.env.get("BETPAWA_USER") or args.username
+    pwd = cfg.env.get("BETPAWA_PASS") or args.password
+    pw = BetpawaPlaywright(username=user, password=pwd, profile_dir=args.profile, headless=False)
+    path = pw.login_and_save_session()
+    print(f"session saved to {path} — now `place` will reuse it")
+
+
+def cmd_place(args) -> None:
+    from .placement.betpawa_pw import BetpawaPlaywright
+
+    cfg, conn = _open()
+    sid = args.slip
+    if sid is None:
+        row = conn.execute("SELECT id FROM slips WHERE status='VALIDATED' ORDER BY id DESC LIMIT 1").fetchone()
+        if not row:
+            print("no VALIDATED slip to place")
+            raise SystemExit(2)
+        sid = row["id"]
+    row = conn.execute("SELECT * FROM slips WHERE id=?", (sid,)).fetchone()
+    if not row:
+        print(f"slip {sid} not found")
+        raise SystemExit(2)
+    if row["status"] != "VALIDATED":
+        print(f"slip {sid} status is {row['status']}, not VALIDATED — validate first")
+        raise SystemExit(2)
+    from sureodds.storage.repo import _row_slip
+
+    slip = _row_slip(row)
+    user = cfg.env.get("BETPAWA_USER")
+    pwd = cfg.env.get("BETPAWA_PASS")
+    pw = BetpawaPlaywright(username=user, password=pwd, profile_dir=args.profile, headless=not args.headed)
+    receipt = pw.place(slip, dry_run=args.dry_run)
+    if receipt.ok:
+        print(f"placed slip {sid} -> bet_id={receipt.bet_id}")
+        if not args.dry_run:
+            conn.execute("UPDATE slips SET status='PLACED', bet_id=?, placed_at=datetime('now') WHERE id=?", (receipt.bet_id, sid))
+            conn.commit()
+    else:
+        print(f"place failed for slip {sid}: {receipt.error}")
+        raise SystemExit(1)
+
+
 def cmd_run(_args) -> None:
     from .scheduler import start
 
@@ -187,6 +233,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("run").set_defaults(func=cmd_run)
     lp = sub.add_parser("listen", help="poll Telegram for Place/Skip buttons")
     lp.set_defaults(func=cmd_listen)
+    bp = sub.add_parser("betpawa-login", help="headed login to save BetPawa session")
+    bp.add_argument("--profile", default="profiles/betpawa")
+    bp.add_argument("--username", default=None)
+    bp.add_argument("--password", default=None)
+    bp.set_defaults(func=cmd_betpawa_login)
+    pl = sub.add_parser("place", help="place validated slip via Playwright (phase-9 gated, use --dry-run to test)")
+    pl.add_argument("--slip", type=int, default=None, help="slip id, defaults to latest VALIDATED")
+    pl.add_argument("--profile", default="profiles/betpawa")
+    pl.add_argument("--headed", action="store_true", help="show browser")
+    pl.add_argument("--dry-run", action="store_true", help="fill betslip but do not click Place Bet")
+    pl.set_defaults(func=cmd_place)
     return p
 
 

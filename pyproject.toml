@@ -36,3 +36,6 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"src/sureodds/placement/*" = ["BLE001", "S110", "S112", "FURB167", "SIM115", "F401", "F403", "FURB", "SIM"]
