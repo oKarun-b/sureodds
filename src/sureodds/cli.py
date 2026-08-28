@@ -150,7 +150,7 @@ def cmd_betpawa_login(args) -> None:
     cfg, _ = _open()
     user = cfg.env.get("BETPAWA_USER") or args.username
     pwd = cfg.env.get("BETPAWA_PASS") or args.password
-    pw = BetpawaPlaywright(username=user, password=pwd, profile_dir=args.profile, headless=False)
+    pw = BetpawaPlaywright(username=user, password=pwd, profile_dir=args.profile, headless=not args.headed)
     path = pw.login_and_save_session()
     print(f"session saved to {path} — now `place` will reuse it")
 
@@ -233,10 +233,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("run").set_defaults(func=cmd_run)
     lp = sub.add_parser("listen", help="poll Telegram for Place/Skip buttons")
     lp.set_defaults(func=cmd_listen)
-    bp = sub.add_parser("betpawa-login", help="headed login to save BetPawa session")
+    bp = sub.add_parser("betpawa-login", help="login to save BetPawa session (auto-fill if BETPAWA_USER/PASS in .env, else manual)")
     bp.add_argument("--profile", default="profiles/betpawa")
     bp.add_argument("--username", default=None)
     bp.add_argument("--password", default=None)
+    bp.add_argument("--headed", action="store_true", help="show browser window")
     bp.set_defaults(func=cmd_betpawa_login)
     pl = sub.add_parser("place", help="place validated slip via Playwright (phase-9 gated, use --dry-run to test)")
     pl.add_argument("--slip", type=int, default=None, help="slip id, defaults to latest VALIDATED")
