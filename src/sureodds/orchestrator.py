@@ -46,10 +46,22 @@ def fetch(cfg: AppConfig, conn, day: str | None = None) -> dict:
     all_fixtures: list = []
     all_quotes: list = []
     for d in sorted(days):
-        fxs = prov.get_fixtures(d)
+        try:
+            fxs = prov.get_fixtures(d)
+        except RuntimeError as e:
+            if "Free plans do not have access to this date" in str(e):
+                print(f"skip {d}: free plan window limit")
+                continue
+            raise
         all_fixtures.extend(fxs)
         repo.upsert_fixtures(conn, fxs)
-        odds = prov.get_odds(d)
+        try:
+            odds = prov.get_odds(d)
+        except RuntimeError as e:
+            if "Free plans do not have access to this date" in str(e) or "Page parameter" in str(e):
+                print(f"skip odds for {d}: {e}")
+                continue
+            raise
         qs = [q for lst in odds.values() for q in lst]
         all_quotes.extend(qs)
         repo.save_quotes(conn, qs)
